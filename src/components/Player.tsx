@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useKeyboardControls } from '@react-three/drei';
 import { Vector3, Euler, MathUtils } from 'three';
+import { Gun } from './Gun';
 
 export function Player() {
   const playerRef = useRef<any>();
@@ -101,9 +102,12 @@ export function Player() {
   });
 
   return (
-    <mesh ref={playerRef} position={[0, 2, 0]}>
-      <capsuleGeometry args={[0.5, 1, 4]} />
-      <meshStandardMaterial color="blue" opacity={0} transparent />
-    </mesh>
+    <>
+      <mesh ref={playerRef} position={[0, 2, 0]}>
+        <capsuleGeometry args={[0.5, 1, 4]} />
+        <meshStandardMaterial color="blue" opacity={0} transparent />
+      </mesh>
+      <Gun />
+    </>
   );
 }
