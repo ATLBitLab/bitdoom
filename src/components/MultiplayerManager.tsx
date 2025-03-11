@@ -139,7 +139,7 @@ export function MultiplayerManager() {
             <mesh userData={{ playerId: id }}>
               <planeGeometry args={[1, 2]} />
               <meshBasicMaterial 
-                map={dot < 0 ? frontTexture : backTexture}
+                map={dot < 0 ? backTexture : frontTexture}
                 transparent
                 side={DoubleSide}
               />
