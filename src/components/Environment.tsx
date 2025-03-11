@@ -27,6 +27,9 @@ export function Environment() {
 
   // Handle portal entry
   const handlePortalEnter = () => {
+    // Release pointer lock before showing escape screen
+    document.exitPointerLock();
+    
     socket.emit('playerEscaped', { id: localStorage.getItem('playerId') });
     const event = new CustomEvent('playerEscaped');
     window.dispatchEvent(event);
