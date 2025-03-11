@@ -6,12 +6,39 @@ import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import axios from "axios";
+import cors from "cors";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 8080;
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+// Configure CORS with flexible origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : ["http://localhost:5173"];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) !== -1 || isDevelopment) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
+
+// Parse JSON bodies
+app.use(express.json());
 
 // Create HTTP server
 const server = createServer(app);
@@ -19,8 +46,17 @@ const server = createServer(app);
 // Create WebSocket server attached to HTTP server
 const wss = new WebSocketServer({ server });
 
-// Serve static files from 'public' directory
-app.use(express.static(path.join(__dirname, "public")));
+// Serve static files from the Vite build directory
+const staticDir = process.env.STATIC_DIR || "dist";
+app.use(express.static(path.join(__dirname, staticDir)));
+
+// Serve index.html for all routes (SPA support)
+app.get("*", (req, res, next) => {
+  // Skip API routes
+  if (req.path.startsWith("/invoice")) return next();
+
+  res.sendFile(path.join(__dirname, staticDir, "index.html"));
+});
 
 const LNBITS_API_URL = process.env.LNBITS_API_URL;
 const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
@@ -28,6 +64,7 @@ const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
 // Route to create a Lightning invoice
 app.post("/invoice", async (req, res) => {
   try {
+    console.log("Creating invoice");
     const response = await axios.post(
       `${LNBITS_API_URL}/api/v1/payments`,
       { out: false, amount: 5, memo: "player join" },
@@ -55,6 +92,7 @@ app.post("/invoice", async (req, res) => {
 // Route to check invoice status
 app.get("/invoice", async (req, res) => {
   try {
+    console.log("Checking invoice status");
     const { id } = req.query;
     if (!id) {
       return res.status(400).json({ error: "Invoice ID is required" });
