@@ -99,6 +99,18 @@ export function Player() {
     // Update camera position and rotation
     camera.position.copy(playerRef.current.position);
     camera.rotation.copy(rotation.current);
+
+    // Dispatch position update event to update window.gameState
+    const event = new CustomEvent('playerPositionUpdate', {
+      detail: {
+        position: {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z
+        }
+      }
+    });
+    window.dispatchEvent(event);
   });
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useThree } from '@react-three/fiber';
-import { Vector3, Euler, DoubleSide } from 'three';
+import { Vector3, Euler, DoubleSide, TextureLoader } from 'three';
 import { Html } from '@react-three/drei';
 import { socket } from '../socket';
 
@@ -11,6 +11,7 @@ interface PlayerState {
   color: string;
   health: number;
   sats: number;
+  name: string;
 }
 
 interface PlayersEventData {
@@ -24,6 +25,30 @@ interface PlayerJoinedEventData {
 interface PlayerLeftEventData {
   id: string;
 }
+
+// Load textures once outside component to avoid reloading
+const textureLoader = new TextureLoader();
+const frontTexture = textureLoader.load('/player-front.png');
+const backTexture = textureLoader.load('/player-back.png');
+
+const adjectives = [
+  'Sneaky', 'Mighty', 'Swift', 'Clever', 'Brave', 
+  'Fierce', 'Gentle', 'Wild', 'Wise', 'Agile',
+  'Silent', 'Mystic', 'Noble', 'Proud', 'Sleepy'
+];
+
+const animals = [
+  'Panda', 'Tiger', 'Fox', 'Wolf', 'Eagle',
+  'Owl', 'Bear', 'Lion', 'Hawk', 'Deer',
+  'Rabbit', 'Lynx', 'Falcon', 'Badger', 'Raven'
+];
+
+// Generate a random name
+const getRandomName = () => {
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const animal = animals[Math.floor(Math.random() * animals.length)];
+  return `${adjective} ${animal}`;
+};
 
 // Generate a random color for the player
 const getRandomColor = () => {
@@ -56,7 +81,8 @@ export function MultiplayerManager() {
       id: playerId,
       color: getRandomColor(),
       health: 100,
-      sats: 1000
+      sats: 1000,
+      name: getRandomName()
     });
 
     // Set up socket event listeners
@@ -114,26 +140,50 @@ export function MultiplayerManager() {
     <>
       {Object.entries(players).map(([id, player]) => {
         if (id === myId) return null; // Don't render self
+
+        // Calculate angle between camera and player to determine which texture to show
+        const cameraDirection = new Vector3();
+        camera.getWorldDirection(cameraDirection);
+        const playerPosition = new Vector3(player.position.x, player.position.y, player.position.z);
+        const playerToCam = new Vector3().subVectors(camera.position, playerPosition).normalize();
+        
+        // Calculate player's forward direction based on their rotation
+        const playerForward = new Vector3(0, 0, -1);
+        playerForward.applyAxisAngle(new Vector3(0, 1, 0), player.rotation.y);
+        
+        // Use dot product between player's forward direction and vector to camera
+        const dot = playerForward.dot(playerToCam);
+
         return (
-          <mesh
-            key={id}
-            position={[player.position.x, player.position.y - 1, player.position.z]}
-            rotation={[0, player.rotation.y, 0]}
-            userData={{ playerId: id }}
-          >
-            <planeGeometry args={[1, 2]} />
-            <meshStandardMaterial color={player.color} side={DoubleSide} />
+          <group key={id} position={[player.position.x, player.position.y - 1, player.position.z]} rotation={[0, player.rotation.y, 0]}>
+            {/* Front-facing plane */}
+            <mesh userData={{ playerId: id }}>
+              <planeGeometry args={[1, 2]} />
+              <meshBasicMaterial 
+                map={dot < 0 ? backTexture : frontTexture}
+                transparent
+                side={DoubleSide}
+              />
+            </mesh>
             
-            {/* Health bar */}
+            {/* Player name and health bar */}
             <Html position={[0, 1.2, 0]} center>
-              <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+              <div className="flex flex-col items-center gap-1">
                 <div 
-                  className="h-full bg-red-500 transition-all duration-300" 
-                  style={{ width: `${player.health}%` }}
-                />
+                  className="text-sm font-bold whitespace-nowrap"
+                  style={{ color: player.color }}
+                >
+                  {player.name}
+                </div>
+                <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+                  <div 
+                    className="h-full bg-red-500 transition-all duration-300" 
+                    style={{ width: `${player.health}%` }}
+                  />
+                </div>
               </div>
             </Html>
-          </mesh>
+          </group>
         );
       })}
     </>

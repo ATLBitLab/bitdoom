@@ -1,11 +1,18 @@
 import { useRef, useEffect } from 'react';
-import { Mesh, MeshStandardMaterial, PointLight } from 'three';
+import { Mesh, MeshStandardMaterial, PointLight, Vector3 } from 'three';
 import { useFrame } from '@react-three/fiber';
 
 interface PortalProps {
   isOpen: boolean;
   onPlayerEnter: () => void;
 }
+
+// Random position for the portal, outside the column area
+const portalPosition = new Vector3(
+  (Math.random() < 0.5 ? -1 : 1) * (Math.random() * 5 + 12), // X: ±(12-17) units from center
+  2, // Y: At player height
+  (Math.random() < 0.5 ? -1 : 1) * (Math.random() * 5 + 12)  // Z: ±(12-17) units from center
+);
 
 export function Portal({ isOpen, onPlayerEnter }: PortalProps) {
   const portalRef = useRef<Mesh>(null);
@@ -25,28 +32,38 @@ export function Portal({ isOpen, onPlayerEnter }: PortalProps) {
       
       materialRef.current.emissiveIntensity = pulse;
       lightRef.current.intensity = slowPulse * 2;
+
+      // Gentle hovering motion
+      portalRef.current.position.y = 2 + Math.sin(time * 0.5) * 0.2; // Hover between 1.8 and 2.2 units
     }
   });
 
   // Check for player collision
   useEffect(() => {
-    if (!isOpen || !portalRef.current) return;
+    if (!isOpen) return;
 
     const checkCollision = () => {
-      if (!portalRef.current) return;
-      
       // Get player position from the game state
       const playerPosition = window.gameState?.player?.position;
-      if (!playerPosition) return;
+      if (!playerPosition) {
+        console.log('No player position found in gameState');
+        return;
+      }
 
-      // Calculate distance between player and portal
-      const dx = playerPosition.x - portalRef.current.position.x;
-      const dy = playerPosition.y - portalRef.current.position.y;
-      const dz = playerPosition.z - portalRef.current.position.z;
+      // Calculate distance between player and portal center
+      const dx = playerPosition.x - portalPosition.x;
+      const dy = playerPosition.y - portalPosition.y;
+      const dz = playerPosition.z - portalPosition.z;
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-      // If player is within 2 units of portal, trigger escape
-      if (distance < 2) {
+      // Debug log
+      console.log('Distance to portal:', distance);
+      console.log('Player position:', playerPosition);
+      console.log('Portal position:', portalPosition);
+
+      // If player is within 3 units of portal, trigger escape
+      if (distance < 3) {
+        console.log('Player entered portal! Triggering escape...');
         onPlayerEnter();
       }
     };
@@ -58,33 +75,33 @@ export function Portal({ isOpen, onPlayerEnter }: PortalProps) {
   if (!isOpen) return null;
 
   return (
-    <group position={[15, 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
+    <group position={[portalPosition.x, portalPosition.y, portalPosition.z]} rotation={[Math.PI / 2, 0, 0]}>
       {/* Main portal disc */}
       <mesh ref={portalRef}>
-        <cylinderGeometry args={[2, 2, 0.5, 32]} />
+        <cylinderGeometry args={[2, 2, 0.1, 32]} />
         <meshStandardMaterial
           ref={materialRef}
           color="#4466ff"
           emissive="#0033ff"
-          emissiveIntensity={1.5}
+          emissiveIntensity={2}
           transparent
           opacity={0.9}
-          metalness={0.5}
-          roughness={0}
+          metalness={0.8}
+          roughness={0.2}
         />
       </mesh>
 
       {/* Inner glow disc */}
-      <mesh position={[0, 0.1, 0]}>
-        <cylinderGeometry args={[1.8, 1.8, 0.3, 32]} />
+      <mesh position={[0, 0.05, 0]}>
+        <cylinderGeometry args={[1.8, 1.8, 0.2, 32]} />
         <meshStandardMaterial
           color="#66aaff"
           emissive="#3366ff"
-          emissiveIntensity={2}
+          emissiveIntensity={3}
           transparent
           opacity={0.7}
           metalness={0.8}
-          roughness={0}
+          roughness={0.2}
         />
       </mesh>
 
@@ -92,7 +109,7 @@ export function Portal({ isOpen, onPlayerEnter }: PortalProps) {
       <pointLight
         ref={lightRef}
         color="#4466ff"
-        intensity={2}
+        intensity={5}
         distance={20}
         decay={2}
       />
