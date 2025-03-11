@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useThree } from '@react-three/fiber';
-import { Vector3, Euler } from 'three';
+import { Vector3, Euler, DoubleSide } from 'three';
 
 interface PlayerState {
   id: string;
@@ -109,7 +109,7 @@ export function MultiplayerManager() {
             rotation={[0, player.rotation.y, 0]} // Only use Y rotation for player model
           >
             <planeGeometry args={[1, 2]} /> {/* 1 unit wide, 2 units tall plane */}
-            <meshStandardMaterial color={player.color} />
+            <meshStandardMaterial color={player.color} side={DoubleSide} />
           </mesh>
         );
       })}
