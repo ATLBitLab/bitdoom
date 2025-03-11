@@ -28,7 +28,8 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
       intervalId = window.setInterval(async () => {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/invoice?id=${invoiceId}`
+            // `${API_BASE_URL}/invoice?id=${invoiceId}`
+            `/invoice?id=${invoiceId}`
           );
           const data = await response.json();
           console.debug("check payment status", data);
@@ -65,7 +66,8 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
     setError("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/invoice`, {
+      // const response = await fetch(`${API_BASE_URL}/invoice`, {
+      const response = await fetch("/invoice", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

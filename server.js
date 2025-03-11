@@ -5,10 +5,26 @@ import * as dotenv from "dotenv";
 dotenv.config();
 import axios from "axios";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Add middleware to parse JSON bodies
+
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, "dist")));
+
+// Handle React routing, return all requests to React app
+app.get("*", (req, res, next) => {
+  if (req.path === "/invoice") {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
