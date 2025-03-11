@@ -15,6 +15,7 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
     "INITIAL"
   );
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     console.debug("status", status);
@@ -30,6 +31,7 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
             `${API_BASE_URL}/invoice?id=${invoiceId}`
           );
           const data = await response.json();
+          console.debug("check payment status", data);
 
           if (data.status === "PAID") {
             setStatus("PAID");
@@ -54,6 +56,14 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
       return;
     }
 
+    // Prevent duplicate submissions
+    if (isLoading || status !== "INITIAL") {
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
     try {
       const response = await fetch(`${API_BASE_URL}/invoice`, {
         method: "POST",
@@ -64,14 +74,19 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
       });
 
       const data = await response.json();
-      console.debug("data", data);
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
       setInvoice(data.payment_request);
       setInvoiceId(data.invoice_id);
       setStatus("PENDING");
-      setError("");
     } catch (err) {
       setError("Failed to generate invoice. Please try again.");
       console.error("Error generating invoice:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -98,13 +113,15 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
                 onChange={(e) => setLightningAddress(e.target.value)}
                 placeholder="your@lightning.address"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
               />
             </div>
             <button
               onClick={handleJoinGame}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading}
             >
-              Join Game
+              {isLoading ? "Generating Invoice..." : "Join Game"}
             </button>
             {error && <p className="text-red-500 text-sm">{error}</p>}
           </div>

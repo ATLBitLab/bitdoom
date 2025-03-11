@@ -76,6 +76,7 @@ app.post("/invoice", async (req, res) => {
       }
     );
 
+    console.debug("returning invoice!");
     return res.json({
       payment_request: response.data.payment_request,
       invoice_id: response.data.payment_hash,
