@@ -1,12 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useThree } from '@react-three/fiber';
 import { Vector3, Euler, DoubleSide } from 'three';
+import { Html } from '@react-three/drei';
+import { socket } from '../socket';
 
 interface PlayerState {
   id: string;
   position: Vector3;
   rotation: Euler;
   color: string;
+  health: number;
+  sats: number;
+}
+
+interface PlayersEventData {
+  players: Record<string, PlayerState>;
+}
+
+interface PlayerJoinedEventData {
+  player: PlayerState;
+}
+
+interface PlayerLeftEventData {
+  id: string;
 }
 
 // Generate a random color for the player
@@ -27,94 +43,71 @@ const getPlayerId = () => {
 
 export function MultiplayerManager() {
   const [players, setPlayers] = useState<Record<string, PlayerState>>({});
-  const [socket, setSocket] = useState<WebSocket | null>(null);
   const [myId, setMyId] = useState<string>('');
   const { camera } = useThree();
 
   useEffect(() => {
-    const connectToServer = () => {
-      const ws = new WebSocket('ws://localhost:8080');
-      setSocket(ws);
+    // Get persistent player ID
+    const playerId = getPlayerId();
+    setMyId(playerId);
 
-      // Get persistent player ID
-      const playerId = getPlayerId();
-      setMyId(playerId);
+    // Send initial player state
+    socket.emit('join', {
+      id: playerId,
+      color: getRandomColor(),
+      health: 100,
+      sats: 1000
+    });
 
-      ws.onopen = () => {
-        console.log('Connected to game server');
-        // Send initial player state
-        ws.send(JSON.stringify({
-          type: 'join',
-          id: playerId,
-          color: getRandomColor()
-        }));
-      };
+    // Set up socket event listeners
+    socket.on('players', (data: PlayersEventData) => {
+      setPlayers(data.players);
+    });
 
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        switch (data.type) {
-          case 'players':
-            setPlayers(data.players);
-            break;
-          case 'playerJoined':
-            setPlayers(prev => ({
-              ...prev,
-              [data.player.id]: data.player
-            }));
-            break;
-          case 'playerLeft':
-            setPlayers(prev => {
-              const newPlayers = { ...prev };
-              delete newPlayers[data.id];
-              return newPlayers;
-            });
-            break;
-        }
-      };
+    socket.on('playerJoined', (data: PlayerJoinedEventData) => {
+      setPlayers(prev => ({
+        ...prev,
+        [data.player.id]: data.player
+      }));
+    });
 
-      ws.onclose = () => {
-        console.log('Disconnected from game server');
-        // Clean up old player data on disconnect
-        setPlayers({});
-        // Try to reconnect after a short delay
-        setTimeout(connectToServer, 1000);
-      };
-
-      return ws;
-    };
-
-    const ws = connectToServer();
+    socket.on('playerLeft', (data: PlayerLeftEventData) => {
+      setPlayers(prev => {
+        const newPlayers = { ...prev };
+        delete newPlayers[data.id];
+        return newPlayers;
+      });
+    });
 
     return () => {
-      ws.close();
+      socket.off('players');
+      socket.off('playerJoined');
+      socket.off('playerLeft');
     };
   }, []);
 
   // Send position updates
   useEffect(() => {
-    if (!socket || !myId) return;
+    if (!myId) return;
 
     const interval = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 'update',
-          id: myId,
-          position: {
-            x: camera.position.x,
-            y: camera.position.y,
-            z: camera.position.z
-          },
-          rotation: {
-            x: camera.rotation.x,
-            y: camera.rotation.y,
-            z: camera.rotation.z
-          }
-        }));
-      }
+      socket.emit('update', {
+        id: myId,
+        position: {
+          x: camera.position.x,
+          y: camera.position.y,
+          z: camera.position.z
+        },
+        rotation: {
+          x: camera.rotation.x,
+          y: camera.rotation.y,
+          z: camera.rotation.z
+        }
+      });
     }, 50); // Send updates 20 times per second
 
     return () => clearInterval(interval);
-  }, [socket, myId, camera]);
+  }, [myId, camera]);
 
   // Render other players
   return (
@@ -124,11 +117,22 @@ export function MultiplayerManager() {
         return (
           <mesh
             key={id}
-            position={[player.position.x, player.position.y - 1, player.position.z]} // Offset Y to show player at feet level
-            rotation={[0, player.rotation.y, 0]} // Only use Y rotation for player model
+            position={[player.position.x, player.position.y - 1, player.position.z]}
+            rotation={[0, player.rotation.y, 0]}
+            userData={{ playerId: id }}
           >
-            <planeGeometry args={[1, 2]} /> {/* 1 unit wide, 2 units tall plane */}
+            <planeGeometry args={[1, 2]} />
             <meshStandardMaterial color={player.color} side={DoubleSide} />
+            
+            {/* Health bar */}
+            <Html position={[0, 1.2, 0]} center>
+              <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+                <div 
+                  className="h-full bg-red-500 transition-all duration-300" 
+                  style={{ width: `${player.health}%` }}
+                />
+              </div>
+            </Html>
           </mesh>
         );
       })}
