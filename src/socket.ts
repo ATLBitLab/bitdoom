@@ -8,7 +8,7 @@ interface PlayerHitData {
 }
 
 // Connect to the WebSocket server
-export const socket = io("wss://bitdoom.app", {
+export const socket = io("https://bitdoom.app", {
   transports: ["websocket"],
   autoConnect: true,
 });
