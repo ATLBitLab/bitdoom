@@ -74,7 +74,8 @@ io.on('connection', (socket) => {
       position: { x: 0, y: 2, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       health: data.health || 100,
-      sats: INITIAL_SATS // Always start with 1000 sats
+      sats: INITIAL_SATS, // Always start with 1000 sats
+      name: data.name // Store the player's name
     };
     
     // Send current players to new player

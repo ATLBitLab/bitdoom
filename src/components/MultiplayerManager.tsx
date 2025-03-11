@@ -11,6 +11,7 @@ interface PlayerState {
   color: string;
   health: number;
   sats: number;
+  name: string;
 }
 
 interface PlayersEventData {
@@ -29,6 +30,25 @@ interface PlayerLeftEventData {
 const textureLoader = new TextureLoader();
 const frontTexture = textureLoader.load('/player-front.png');
 const backTexture = textureLoader.load('/player-back.png');
+
+const adjectives = [
+  'Sneaky', 'Mighty', 'Swift', 'Clever', 'Brave', 
+  'Fierce', 'Gentle', 'Wild', 'Wise', 'Agile',
+  'Silent', 'Mystic', 'Noble', 'Proud', 'Sleepy'
+];
+
+const animals = [
+  'Panda', 'Tiger', 'Fox', 'Wolf', 'Eagle',
+  'Owl', 'Bear', 'Lion', 'Hawk', 'Deer',
+  'Rabbit', 'Lynx', 'Falcon', 'Badger', 'Raven'
+];
+
+// Generate a random name
+const getRandomName = () => {
+  const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const animal = animals[Math.floor(Math.random() * animals.length)];
+  return `${adjective} ${animal}`;
+};
 
 // Generate a random color for the player
 const getRandomColor = () => {
@@ -61,7 +81,8 @@ export function MultiplayerManager() {
       id: playerId,
       color: getRandomColor(),
       health: 100,
-      sats: 1000
+      sats: 1000,
+      name: getRandomName()
     });
 
     // Set up socket event listeners
@@ -145,13 +166,21 @@ export function MultiplayerManager() {
               />
             </mesh>
             
-            {/* Health bar */}
+            {/* Player name and health bar */}
             <Html position={[0, 1.2, 0]} center>
-              <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+              <div className="flex flex-col items-center gap-1">
                 <div 
-                  className="h-full bg-red-500 transition-all duration-300" 
-                  style={{ width: `${player.health}%` }}
-                />
+                  className="text-sm font-bold whitespace-nowrap"
+                  style={{ color: player.color }}
+                >
+                  {player.name}
+                </div>
+                <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+                  <div 
+                    className="h-full bg-red-500 transition-all duration-300" 
+                    style={{ width: `${player.health}%` }}
+                  />
+                </div>
               </div>
             </Html>
           </group>
