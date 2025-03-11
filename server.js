@@ -12,6 +12,7 @@ const io = new Server(httpServer, {
 // Store all connected players
 const players = {};
 const DAMAGE = 5; // 5% damage per hit
+const INITIAL_SATS = 1000; // Starting bitcoin amount
 
 io.on('connection', (socket) => {
   console.log('New connection established');
@@ -31,7 +32,7 @@ io.on('connection', (socket) => {
       position: { x: 0, y: 2, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       health: data.health || 100,
-      sats: data.sats || 1000
+      sats: INITIAL_SATS // Always start with 1000 sats
     };
     
     // Send current players to new player
@@ -57,13 +58,27 @@ io.on('connection', (socket) => {
   socket.on('hit', (data) => {
     // Handle player being hit
     const targetPlayer = players[data.targetId];
-    if (targetPlayer && targetPlayer.health > 0) {
+    const attackingPlayer = players[data.id]; // Add the attacking player's ID to track who dealt the damage
+
+    if (targetPlayer && targetPlayer.health > 0 && attackingPlayer) {
       // Apply damage
       targetPlayer.health = Math.max(0, targetPlayer.health - DAMAGE);
       
-      // If player dies, they lose their bitcoin
+      // If player dies, transfer their bitcoin to the killer
       if (targetPlayer.health <= 0) {
+        const stolenSats = targetPlayer.sats;
         targetPlayer.sats = 0;
+        attackingPlayer.sats += stolenSats;
+
+        console.log(`Player ${data.id} killed Player ${data.targetId} and stole ${stolenSats} sats`);
+        
+        // Notify the killer about their new sats
+        io.to(data.id).emit('playerHit', {
+          targetId: data.targetId,
+          newHealth: attackingPlayer.health,
+          newSats: attackingPlayer.sats,
+          stolenSats: stolenSats
+        });
       }
 
       console.log(`Player ${data.targetId} hit, new health: ${targetPlayer.health}`);
@@ -76,6 +91,16 @@ io.on('connection', (socket) => {
       });
 
       // Update all players about the new state
+      io.emit('players', { players });
+    }
+  });
+
+  socket.on('respawn', (data) => {
+    if (players[data.id]) {
+      players[data.id].health = 100;
+      players[data.id].position = { x: 0, y: 2, z: 0 };
+      
+      // Notify all players
       io.emit('players', { players });
     }
   });

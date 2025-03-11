@@ -1,10 +1,17 @@
 import { Infinity } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { socket } from '../socket';
+
+interface KillNotification {
+  stolenSats: number;
+  timestamp: number;
+}
 
 export function HUD() {
   const [health, setHealth] = useState(100);
   const [sats, setSats] = useState(1000);
   const [isDead, setIsDead] = useState(false);
+  const [killNotifications, setKillNotifications] = useState<KillNotification[]>([]);
 
   useEffect(() => {
     const handleDamage = (event: CustomEvent) => {
@@ -16,21 +23,53 @@ export function HUD() {
       }
     };
 
+    const handleKill = (event: CustomEvent) => {
+      console.log('Kill event received:', event.detail);
+      // Add new kill notification
+      setKillNotifications(prev => [
+        {
+          stolenSats: event.detail.stolenSats,
+          timestamp: Date.now()
+        },
+        ...prev
+      ]);
+
+      // Remove notification after 3 seconds
+      setTimeout(() => {
+        setKillNotifications(prev => prev.slice(0, -1));
+      }, 3000);
+    };
+
     window.addEventListener('playerDamaged', handleDamage as EventListener);
-    return () => window.removeEventListener('playerDamaged', handleDamage as EventListener);
+    window.addEventListener('playerKill', handleKill as EventListener);
+    
+    return () => {
+      window.removeEventListener('playerDamaged', handleDamage as EventListener);
+      window.removeEventListener('playerKill', handleKill as EventListener);
+    };
   }, []);
 
   const handleRespawn = () => {
     setHealth(100);
-    setSats(0);
     setIsDead(false);
     // Notify server of respawn
-    const event = new CustomEvent('playerRespawn');
-    window.dispatchEvent(event);
+    socket.emit('respawn', { id: localStorage.getItem('playerId') });
   };
 
   return (
     <>
+      {/* Kill Notifications */}
+      <div className="fixed top-4 right-4 z-50">
+        {killNotifications.map((notification, index) => (
+          <div
+            key={notification.timestamp}
+            className="bg-yellow-500 text-black px-4 py-2 rounded mb-2 animate-fade-in"
+          >
+            +{notification.stolenSats} sats from kill!
+          </div>
+        ))}
+      </div>
+
       {/* Death screen */}
       {isDead && (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
