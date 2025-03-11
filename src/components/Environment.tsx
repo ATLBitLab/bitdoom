@@ -34,12 +34,12 @@ export function Environment() {
 
   // Listen for portal state changes from server
   useEffect(() => {
-    socket.on('portalStateChange', (data: { isOpen: boolean }) => {
+    socket.on('portalTimerSync', (data: { countdown: number; isOpen: boolean }) => {
       setIsPortalOpen(data.isOpen);
     });
 
     return () => {
-      socket.off('portalStateChange');
+      socket.off('portalTimerSync');
     };
   }, []);
 
