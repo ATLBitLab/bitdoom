@@ -1,6 +1,8 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Mesh, PointLight, Vector3 } from 'three';
 import { useFrame } from '@react-three/fiber';
+import { Portal } from './Portal';
+import { socket } from '../socket';
 
 interface FloatingOrb {
   position: [number, number, number];
@@ -17,10 +19,29 @@ const orbs: FloatingOrb[] = [
 ];
 
 export function Environment() {
+  const [isPortalOpen, setIsPortalOpen] = useState(false);
   const floorRef = useRef<Mesh>(null);
   const orbRefs = useRef<Array<{ mesh: Mesh | null; light: PointLight | null }>>(
     orbs.map(() => ({ mesh: null, light: null }))
   );
+
+  // Handle portal entry
+  const handlePortalEnter = () => {
+    socket.emit('playerEscaped', { id: localStorage.getItem('playerId') });
+    const event = new CustomEvent('playerEscaped');
+    window.dispatchEvent(event);
+  };
+
+  // Listen for portal state changes from server
+  useEffect(() => {
+    socket.on('portalStateChange', (data: { isOpen: boolean }) => {
+      setIsPortalOpen(data.isOpen);
+    });
+
+    return () => {
+      socket.off('portalStateChange');
+    };
+  }, []);
 
   // Animate orbs
   useFrame(({ clock }) => {
@@ -93,6 +114,9 @@ export function Environment() {
           />
         </group>
       ))}
+
+      {/* Portal */}
+      <Portal isOpen={isPortalOpen} onPlayerEnter={handlePortalEnter} />
 
       {/* Ambient Lighting */}
       <ambientLight intensity={1.0} />

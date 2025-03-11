@@ -4,11 +4,13 @@ import { Environment } from './Environment';
 import { Player } from './Player';
 import { HUD } from './HUD';
 import { MultiplayerManager } from './MultiplayerManager';
+import { BackgroundMusic } from './BackgroundMusic';
 import { Color } from 'three';
 
 export function Game() {
   return (
     <div className="h-screen w-screen">
+      <BackgroundMusic />
       <KeyboardControls
         map={[
           { name: 'forward', keys: ['ArrowUp', 'w', 'W'] },

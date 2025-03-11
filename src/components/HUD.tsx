@@ -1,6 +1,7 @@
 import { Infinity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { socket } from '../socket';
+import { useGame } from '../hooks/useGame';
 
 interface KillNotification {
   stolenSats: number;
@@ -12,10 +13,13 @@ export function HUD() {
   const [sats, setSats] = useState(1000);
   const [isDead, setIsDead] = useState(false);
   const [killNotifications, setKillNotifications] = useState<KillNotification[]>([]);
+  const [countdown, setCountdown] = useState(60);
+  const [isPortalOpen, setIsPortalOpen] = useState(false);
+  const [hasEscaped, setHasEscaped] = useState(false);
+  const { emitRespawn } = useGame();
 
   useEffect(() => {
     const handleDamage = (event: CustomEvent) => {
-      console.log('HUD received playerDamaged event:', event.detail);
       setHealth(event.detail.health);
       setSats(event.detail.sats);
       if (event.detail.health <= 0) {
@@ -24,37 +28,77 @@ export function HUD() {
     };
 
     const handleKill = (event: CustomEvent) => {
-      console.log('Kill event received:', event.detail);
-      // Add new kill notification
-      setKillNotifications(prev => [
-        {
-          stolenSats: event.detail.stolenSats,
-          timestamp: Date.now()
-        },
-        ...prev
-      ]);
-
-      // Remove notification after 3 seconds
+      const notification: KillNotification = {
+        stolenSats: event.detail.stolenSats,
+        timestamp: Date.now(),
+      };
+      setKillNotifications(prev => [notification, ...prev]);
       setTimeout(() => {
-        setKillNotifications(prev => prev.slice(0, -1));
+        setKillNotifications(prev => prev.filter(n => n !== notification));
       }, 3000);
     };
 
+    const handleEscape = () => {
+      setHasEscaped(true);
+    };
+
+    // Sync portal timer with server
+    socket.on('portalTimerSync', (data: { countdown: number; isOpen: boolean }) => {
+      setCountdown(data.countdown);
+      setIsPortalOpen(data.isOpen);
+    });
+
     window.addEventListener('playerDamaged', handleDamage as EventListener);
     window.addEventListener('playerKill', handleKill as EventListener);
-    
+    window.addEventListener('playerEscaped', handleEscape as EventListener);
+
     return () => {
       window.removeEventListener('playerDamaged', handleDamage as EventListener);
       window.removeEventListener('playerKill', handleKill as EventListener);
+      window.removeEventListener('playerEscaped', handleEscape as EventListener);
+      socket.off('portalTimerSync');
     };
   }, []);
 
   const handleRespawn = () => {
     setHealth(100);
     setIsDead(false);
-    // Notify server of respawn
     socket.emit('respawn', { id: localStorage.getItem('playerId') });
   };
+
+  if (hasEscaped) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div className="text-center">
+          <h2 className="text-blue-500 text-4xl mb-4">You Escaped!</h2>
+          <p className="text-white text-xl mb-4">Your Bitcoin Balance: {sats} sats</p>
+          <button
+            onClick={() => window.location.href = '/claim'}
+            className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-3 rounded-lg text-lg transition-colors"
+          >
+            Claim Your Bitcoin
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDead) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div className="text-center">
+          <h2 className="text-red-500 text-4xl mb-4">You're doomed!</h2>
+          <p className="text-white text-xl mb-8">You lost your bitcoin.</p>
+          <button
+            onClick={handleRespawn}
+            className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg text-lg transition-colors"
+          >
+            Respawn
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -70,21 +114,14 @@ export function HUD() {
         ))}
       </div>
 
-      {/* Death screen */}
-      {isDead && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-          <div className="text-center">
-            <h2 className="text-red-500 text-4xl mb-4">You're doomed!</h2>
-            <p className="text-white text-xl mb-8">You lost your bitcoin.</p>
-            <button
-              onClick={handleRespawn}
-              className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg text-lg transition-colors"
-            >
-              Respawn
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Portal Timer */}
+      <div className="fixed top-4 left-4 text-2xl font-bold text-white z-50">
+        {isPortalOpen ? (
+          <div className="text-blue-400">Portal Open!</div>
+        ) : (
+          <div>Portal: {countdown}s</div>
+        )}
+      </div>
 
       {/* Crosshair */}
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">

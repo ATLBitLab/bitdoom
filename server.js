@@ -95,11 +95,53 @@ const players = {};
 const DAMAGE = 5; // 5% damage per hit
 const INITIAL_SATS = 1000; // Starting bitcoin amount
 
-io.on("connection", (socket) => {
-  console.log("New connection established");
+// Portal timer constants
+const PORTAL_COUNTDOWN = 60;
+const PORTAL_DURATION = 10;
+let portalTimer = PORTAL_COUNTDOWN;
+let portalOpen = false;
+let timerInterval = null;
+
+// Start the portal timer when the server starts
+function startPortalTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  
+  timerInterval = setInterval(() => {
+    if (!portalOpen) {
+      // Countdown phase
+      portalTimer--;
+      
+      if (portalTimer <= 0) {
+        // Open portal
+        portalOpen = true;
+        portalTimer = PORTAL_DURATION;
+        io.emit('portalTimerSync', { countdown: portalTimer, isOpen: true });
+        
+        // Set timeout to close portal
+        setTimeout(() => {
+          portalOpen = false;
+          portalTimer = PORTAL_COUNTDOWN;
+          io.emit('portalTimerSync', { countdown: portalTimer, isOpen: false });
+        }, PORTAL_DURATION * 1000);
+      } else {
+        // Regular countdown update
+        io.emit('portalTimerSync', { countdown: portalTimer, isOpen: false });
+      }
+    }
+  }, 1000);
+}
+
+// Start the timer when server starts
+startPortalTimer();
+
+io.on('connection', (socket) => {
+  console.log('New connection established');
   let playerId = null;
 
-  socket.on("join", (data) => {
+  // Send current portal state to new connections
+  socket.emit('portalTimerSync', { countdown: portalTimer, isOpen: portalOpen });
+
+  socket.on('join', (data) => {
     playerId = data.id;
 
     // Join a room with the player's ID
@@ -125,7 +167,17 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("update", (data) => {
+  socket.on('playerEscaped', (data) => {
+    const player = players[data.id];
+    if (player && portalOpen) {
+      // Handle player escape - they keep their sats
+      io.to(data.id).emit('escaped', { sats: player.sats });
+      delete players[data.id];
+      socket.broadcast.emit('playerLeft', { id: data.id });
+    }
+  });
+
+  socket.on('update', (data) => {
     // Update player position and rotation
     if (players[data.id]) {
       players[data.id].position = data.position;
