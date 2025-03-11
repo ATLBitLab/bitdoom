@@ -15,6 +15,16 @@ const getRandomColor = () => {
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
+// Get or create persistent player ID
+const getPlayerId = () => {
+  const storedId = localStorage.getItem('playerId');
+  if (storedId) return storedId;
+  
+  const newId = Math.random().toString(36).substring(7);
+  localStorage.setItem('playerId', newId);
+  return newId;
+};
+
 export function MultiplayerManager() {
   const [players, setPlayers] = useState<Record<string, PlayerState>>({});
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -22,52 +32,59 @@ export function MultiplayerManager() {
   const { camera } = useThree();
 
   useEffect(() => {
-    // Connect to WebSocket server
-    const ws = new WebSocket('ws://localhost:8080');
-    setSocket(ws);
+    const connectToServer = () => {
+      const ws = new WebSocket('ws://localhost:8080');
+      setSocket(ws);
 
-    // Generate a random ID for this player
-    const playerId = Math.random().toString(36).substring(7);
-    setMyId(playerId);
+      // Get persistent player ID
+      const playerId = getPlayerId();
+      setMyId(playerId);
 
-    // Handle WebSocket events
-    ws.onopen = () => {
-      console.log('Connected to game server');
-      // Send initial player state
-      ws.send(JSON.stringify({
-        type: 'join',
-        id: playerId,
-        color: getRandomColor()
-      }));
+      ws.onopen = () => {
+        console.log('Connected to game server');
+        // Send initial player state
+        ws.send(JSON.stringify({
+          type: 'join',
+          id: playerId,
+          color: getRandomColor()
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+          case 'players':
+            setPlayers(data.players);
+            break;
+          case 'playerJoined':
+            setPlayers(prev => ({
+              ...prev,
+              [data.player.id]: data.player
+            }));
+            break;
+          case 'playerLeft':
+            setPlayers(prev => {
+              const newPlayers = { ...prev };
+              delete newPlayers[data.id];
+              return newPlayers;
+            });
+            break;
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('Disconnected from game server');
+        // Clean up old player data on disconnect
+        setPlayers({});
+        // Try to reconnect after a short delay
+        setTimeout(connectToServer, 1000);
+      };
+
+      return ws;
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      switch (data.type) {
-        case 'players':
-          setPlayers(data.players);
-          break;
-        case 'playerJoined':
-          setPlayers(prev => ({
-            ...prev,
-            [data.player.id]: data.player
-          }));
-          break;
-        case 'playerLeft':
-          setPlayers(prev => {
-            const newPlayers = { ...prev };
-            delete newPlayers[data.id];
-            return newPlayers;
-          });
-          break;
-      }
-    };
+    const ws = connectToServer();
 
-    ws.onclose = () => {
-      console.log('Disconnected from game server');
-    };
-
-    // Cleanup
     return () => {
       ws.close();
     };
@@ -78,20 +95,22 @@ export function MultiplayerManager() {
     if (!socket || !myId) return;
 
     const interval = setInterval(() => {
-      socket.send(JSON.stringify({
-        type: 'update',
-        id: myId,
-        position: {
-          x: camera.position.x,
-          y: camera.position.y,
-          z: camera.position.z
-        },
-        rotation: {
-          x: camera.rotation.x,
-          y: camera.rotation.y,
-          z: camera.rotation.z
-        }
-      }));
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: 'update',
+          id: myId,
+          position: {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z
+          },
+          rotation: {
+            x: camera.rotation.x,
+            y: camera.rotation.y,
+            z: camera.rotation.z
+          }
+        }));
+      }
     }, 50); // Send updates 20 times per second
 
     return () => clearInterval(interval);
