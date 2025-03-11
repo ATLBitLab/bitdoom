@@ -1,12 +1,77 @@
 import { Server } from "socket.io";
 import { createServer } from "http";
+import express from "express";
+import * as dotenv from "dotenv";
+dotenv.config();
+import axios from "axios";
+import cors from "cors";
 
-const httpServer = createServer();
+const app = express();
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json()); // Add middleware to parse JSON bodies
+
+const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
   },
+});
+
+const LNBITS_API_URL = process.env.LNBITS_API_URL;
+const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
+
+// Route to create a Lightning invoice
+app.post("/invoice", async (req, res) => {
+  try {
+    console.log("Creating invoice");
+    const response = await axios.post(
+      `${LNBITS_API_URL}/api/v1/payments`,
+      { out: false, amount: 5, memo: "player join" },
+      {
+        headers: {
+          "X-Api-Key": LNBITS_ADMIN_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.debug("returning invoice!");
+    return res.json({
+      payment_request: response.data.payment_request,
+      invoice_id: response.data.payment_hash,
+    });
+  } catch (error) {
+    console.error(
+      "Error creating invoice:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to create invoice" });
+  }
+});
+
+// Route to check invoice status
+app.get("/invoice", async (req, res) => {
+  try {
+    console.log("Checking invoice status");
+    const { id } = req.query;
+    if (!id) {
+      return res.status(400).json({ error: "Invoice ID is required" });
+    }
+
+    const response = await axios.get(
+      `${LNBITS_API_URL}/api/v1/payments/${id}`,
+      { headers: { "X-Api-Key": LNBITS_ADMIN_KEY } }
+    );
+
+    return res.json({ status: response.data.paid ? "PAID" : "PENDING" });
+  } catch (error) {
+    console.error(
+      "Error checking invoice status:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to fetch invoice status" });
+  }
 });
 
 // Store all connected players
