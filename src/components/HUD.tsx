@@ -8,6 +8,7 @@ export function HUD() {
 
   useEffect(() => {
     const handleDamage = (event: CustomEvent) => {
+      console.log('HUD received playerDamaged event:', event.detail);
       setHealth(event.detail.health);
       setSats(event.detail.sats);
       if (event.detail.health <= 0) {

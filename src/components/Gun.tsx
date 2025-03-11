@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3, Mesh, SphereGeometry, MeshBasicMaterial, Raycaster } from 'three';
+import { emitHit } from '../socket';
 
 interface Projectile {
   mesh: Mesh;
@@ -19,15 +20,8 @@ export function Gun() {
   // Handle projectile hit event
   useEffect(() => {
     const handleProjectileHit = (event: CustomEvent) => {
-      // Send hit to server via WebSocket
-      const ws = new WebSocket('ws://localhost:8080');
-      ws.onopen = () => {
-        ws.send(JSON.stringify({
-          type: 'hit',
-          targetId: event.detail.targetId
-        }));
-        ws.close();
-      };
+      // Use the centralized socket connection
+      emitHit(event.detail.targetId);
     };
 
     window.addEventListener('projectileHit', handleProjectileHit as EventListener);

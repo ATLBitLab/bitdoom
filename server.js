@@ -1,149 +1,101 @@
-import { WebSocketServer } from 'ws';
+import { Server } from 'socket.io';
+import { createServer } from 'http';
 
-const wss = new WebSocketServer({ port: 8080 });
+const httpServer = createServer();
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Store all connected players
 const players = {};
-// Store WebSocket connections by player ID
-const connections = {};
-
 const DAMAGE = 5; // 5% damage per hit
 
-wss.on('connection', (ws) => {
+io.on('connection', (socket) => {
   console.log('New connection established');
   let playerId = null;
 
-  ws.on('message', (message) => {
-    const data = JSON.parse(message);
-    playerId = data.id; // Store the player ID for this connection
+  socket.on('join', (data) => {
+    playerId = data.id;
+    
+    // Join a room with the player's ID
+    socket.join(playerId);
+    console.log(`Player ${playerId} joined room ${playerId}`);
 
-    switch (data.type) {
-      case 'join':
-        // Check if this player already exists
-        if (connections[data.id]) {
-          // Close the old connection
-          connections[data.id].close();
-        }
+    // Update or create player
+    players[data.id] = {
+      id: data.id,
+      color: data.color,
+      position: { x: 0, y: 2, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      health: data.health || 100,
+      sats: data.sats || 1000
+    };
+    
+    // Send current players to new player
+    socket.emit('players', { players });
 
-        // Store the new connection
-        connections[data.id] = ws;
+    // Notify other players
+    socket.broadcast.emit('playerJoined', {
+      player: players[data.id]
+    });
+  });
 
-        // Update or create player
-        players[data.id] = {
-          id: data.id,
-          color: data.color,
-          position: { x: 0, y: 2, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 },
-          health: data.health || 100,
-          sats: data.sats || 1000
-        };
-        
-        // Send current players to new player
-        ws.send(JSON.stringify({
-          type: 'players',
-          players
-        }));
+  socket.on('update', (data) => {
+    // Update player position and rotation
+    if (players[data.id]) {
+      players[data.id].position = data.position;
+      players[data.id].rotation = data.rotation;
 
-        // Notify other players
-        wss.clients.forEach(client => {
-          if (client !== ws && client.readyState === ws.OPEN) {
-            client.send(JSON.stringify({
-              type: 'playerJoined',
-              player: players[data.id]
-            }));
-          }
-        });
-        break;
-
-      case 'update':
-        // Update player position and rotation
-        if (players[data.id]) {
-          players[data.id].position = data.position;
-          players[data.id].rotation = data.rotation;
-
-          // Broadcast update to all other players
-          wss.clients.forEach(client => {
-            if (client !== ws && client.readyState === ws.OPEN) {
-              client.send(JSON.stringify({
-                type: 'players',
-                players
-              }));
-            }
-          });
-        }
-        break;
-
-      case 'hit':
-        // Handle player being hit
-        const targetPlayer = players[data.targetId];
-        if (targetPlayer && targetPlayer.health > 0) {
-          // Apply damage
-          targetPlayer.health = Math.max(0, targetPlayer.health - DAMAGE);
-          
-          // If player dies, they lose their bitcoin
-          if (targetPlayer.health <= 0) {
-            targetPlayer.sats = 0;
-          }
-
-          // Notify the hit player
-          const targetConnection = connections[data.targetId];
-          if (targetConnection && targetConnection.readyState === ws.OPEN) {
-            targetConnection.send(JSON.stringify({
-              type: 'playerHit',
-              targetId: data.targetId,
-              newHealth: targetPlayer.health,
-              newSats: targetPlayer.sats
-            }));
-          }
-
-          // Update all players about the new state
-          wss.clients.forEach(client => {
-            if (client.readyState === ws.OPEN) {
-              client.send(JSON.stringify({
-                type: 'players',
-                players
-              }));
-            }
-          });
-        }
-        break;
-
-      case 'respawn':
-        if (players[data.id]) {
-          players[data.id].health = 100;
-          players[data.id].sats = 0;
-          players[data.id].position = { x: 0, y: 2, z: 0 };
-          
-          // Notify all players
-          wss.clients.forEach(client => {
-            if (client.readyState === ws.OPEN) {
-              client.send(JSON.stringify({
-                type: 'players',
-                players
-              }));
-            }
-          });
-        }
-        break;
+      // Broadcast update to all other players
+      socket.broadcast.emit('players', { players });
     }
   });
 
-  ws.on('close', () => {
-    if (playerId && connections[playerId] === ws) {
-      // Only remove the player if this is their most recent connection
+  socket.on('hit', (data) => {
+    // Handle player being hit
+    const targetPlayer = players[data.targetId];
+    if (targetPlayer && targetPlayer.health > 0) {
+      // Apply damage
+      targetPlayer.health = Math.max(0, targetPlayer.health - DAMAGE);
+      
+      // If player dies, they lose their bitcoin
+      if (targetPlayer.health <= 0) {
+        targetPlayer.sats = 0;
+      }
+
+      console.log(`Player ${data.targetId} hit, new health: ${targetPlayer.health}`);
+
+      // Notify the hit player through their room
+      io.to(data.targetId).emit('playerHit', {
+        targetId: data.targetId,
+        newHealth: targetPlayer.health,
+        newSats: targetPlayer.sats
+      });
+
+      // Update all players about the new state
+      io.emit('players', { players });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if (playerId) {
       console.log(`Player ${playerId} disconnected`);
-      delete connections[playerId];
       delete players[playerId];
 
+      // Leave the room
+      socket.leave(playerId);
+
       // Notify other players
-      wss.clients.forEach(client => {
-        if (client.readyState === ws.OPEN) {
-          client.send(JSON.stringify({
-            type: 'playerLeft',
-            id: playerId
-          }));
-        }
+      socket.broadcast.emit('playerLeft', {
+        id: playerId
       });
     }
   });
+});
+
+httpServer.listen(8080, () => {
+  console.log('Server running on port 8080');
 }); 
