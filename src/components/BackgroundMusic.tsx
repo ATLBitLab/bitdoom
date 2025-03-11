@@ -14,6 +14,7 @@ export function BackgroundMusic() {
       if (audioRef.current) {
         audioRef.current.src = `/music-${randomTrack}.mp3`;
         audioRef.current.volume = 0.3; // Set volume to 30%
+        audioRef.current.loop = true; // Enable looping
         audioRef.current.play().catch(error => {
           console.log('Audio playback failed:', error);
         });
@@ -22,21 +23,13 @@ export function BackgroundMusic() {
 
     // Create audio element
     audioRef.current = new Audio();
-    audioRef.current.loop = false;
 
     // Play first random track
     playRandomTrack();
 
-    // Set up ended event listener to play next random track
-    const handleEnded = () => {
-      playRandomTrack();
-    };
-    audioRef.current.addEventListener('ended', handleEnded);
-
     // Cleanup
     return () => {
       if (audioRef.current) {
-        audioRef.current.removeEventListener('ended', handleEnded);
         audioRef.current.pause();
         audioRef.current = null;
       }
