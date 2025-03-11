@@ -3,6 +3,7 @@ import { Stars, KeyboardControls } from '@react-three/drei';
 import { Environment } from './Environment';
 import { Player } from './Player';
 import { HUD } from './HUD';
+import { MultiplayerManager } from './MultiplayerManager';
 import { Color } from 'three';
 
 export function Game() {
@@ -27,6 +28,7 @@ export function Game() {
         >
           <Environment />
           <Player />
+          <MultiplayerManager />
           <Stars 
             radius={200} 
             depth={50} 
