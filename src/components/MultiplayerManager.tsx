@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useThree } from '@react-three/fiber';
 import { Vector3, Euler, DoubleSide } from 'three';
+import { Html } from '@react-three/drei';
 
 interface PlayerState {
   id: string;
   position: Vector3;
   rotation: Euler;
   color: string;
+  health: number;
+  sats: number;
 }
 
 // Generate a random color for the player
@@ -31,6 +34,21 @@ export function MultiplayerManager() {
   const [myId, setMyId] = useState<string>('');
   const { camera } = useThree();
 
+  // Handle projectile hits
+  useEffect(() => {
+    const handleProjectileHit = (event: CustomEvent) => {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: 'hit',
+          targetId: event.detail.targetId
+        }));
+      }
+    };
+
+    window.addEventListener('projectileHit', handleProjectileHit as EventListener);
+    return () => window.removeEventListener('projectileHit', handleProjectileHit as EventListener);
+  }, [socket]);
+
   useEffect(() => {
     const connectToServer = () => {
       const ws = new WebSocket('ws://localhost:8080');
@@ -46,7 +64,9 @@ export function MultiplayerManager() {
         ws.send(JSON.stringify({
           type: 'join',
           id: playerId,
-          color: getRandomColor()
+          color: getRandomColor(),
+          health: 100,
+          sats: 1000
         }));
       };
 
@@ -68,6 +88,15 @@ export function MultiplayerManager() {
               delete newPlayers[data.id];
               return newPlayers;
             });
+            break;
+          case 'playerHit':
+            if (data.targetId === myId) {
+              // We got hit!
+              const event = new CustomEvent('playerDamaged', { 
+                detail: { health: data.newHealth, sats: data.newSats } 
+              });
+              window.dispatchEvent(event);
+            }
             break;
         }
       };
@@ -124,11 +153,22 @@ export function MultiplayerManager() {
         return (
           <mesh
             key={id}
-            position={[player.position.x, player.position.y - 1, player.position.z]} // Offset Y to show player at feet level
-            rotation={[0, player.rotation.y, 0]} // Only use Y rotation for player model
+            position={[player.position.x, player.position.y - 1, player.position.z]}
+            rotation={[0, player.rotation.y, 0]}
+            userData={{ playerId: id }}
           >
-            <planeGeometry args={[1, 2]} /> {/* 1 unit wide, 2 units tall plane */}
+            <planeGeometry args={[1, 2]} />
             <meshStandardMaterial color={player.color} side={DoubleSide} />
+            
+            {/* Health bar */}
+            <Html position={[0, 1.2, 0]} center>
+              <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
+                <div 
+                  className="h-full bg-red-500 transition-all duration-300" 
+                  style={{ width: `${player.health}%` }}
+                />
+              </div>
+            </Html>
           </mesh>
         );
       })}

@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Vector3, Mesh, SphereGeometry, MeshBasicMaterial } from 'three';
+import { Vector3, Mesh, SphereGeometry, MeshBasicMaterial, Raycaster } from 'three';
 
 interface Projectile {
   mesh: Mesh;
@@ -14,6 +14,25 @@ export function Gun() {
   const { scene, camera } = useThree();
   const PROJECTILE_SPEED = 50;
   const PROJECTILE_LIFETIME = 3000; // 3 seconds
+  const raycaster = new Raycaster();
+
+  // Handle projectile hit event
+  useEffect(() => {
+    const handleProjectileHit = (event: CustomEvent) => {
+      // Send hit to server via WebSocket
+      const ws = new WebSocket('ws://localhost:8080');
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          type: 'hit',
+          targetId: event.detail.targetId
+        }));
+        ws.close();
+      };
+    };
+
+    window.addEventListener('projectileHit', handleProjectileHit as EventListener);
+    return () => window.removeEventListener('projectileHit', handleProjectileHit as EventListener);
+  }, []);
 
   useEffect(() => {
     const handleShoot = () => {
@@ -48,7 +67,20 @@ export function Gun() {
     return () => document.removeEventListener('mousedown', handleShoot);
   }, [camera, scene]);
 
-  // Update projectiles
+  // Handle respawn event
+  useEffect(() => {
+    const handleRespawn = () => {
+      // Reset player position
+      if (camera) {
+        camera.position.set(0, 2, 0);
+      }
+    };
+
+    window.addEventListener('playerRespawn', handleRespawn);
+    return () => window.removeEventListener('playerRespawn', handleRespawn);
+  }, [camera]);
+
+  // Update projectiles and check collisions
   useFrame(() => {
     const now = Date.now();
     setProjectiles(prev => {
@@ -60,7 +92,35 @@ export function Gun() {
         }
 
         // Update position
-        projectile.mesh.position.add(projectile.velocity.clone().multiplyScalar(1/60));
+        const movement = projectile.velocity.clone().multiplyScalar(1/60);
+        projectile.mesh.position.add(movement);
+
+        // Check for collisions with other players
+        raycaster.set(projectile.mesh.position, projectile.velocity.clone().normalize());
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        
+        for (const intersect of intersects) {
+          // Find the root mesh (the player mesh)
+          let currentObject = intersect.object;
+          while (currentObject.parent && !currentObject.userData.playerId) {
+            currentObject = currentObject.parent;
+          }
+
+          // Check if we hit a player
+          if (currentObject.userData.playerId && intersect.distance < 0.5) {
+            // Remove the projectile
+            scene.remove(projectile.mesh);
+            
+            // Send hit event
+            const event = new CustomEvent('projectileHit', {
+              detail: { targetId: currentObject.userData.playerId }
+            });
+            window.dispatchEvent(event);
+            
+            return false;
+          }
+        }
+
         return true;
       });
 

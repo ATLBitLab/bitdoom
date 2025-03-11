@@ -7,6 +7,8 @@ const players = {};
 // Store WebSocket connections by player ID
 const connections = {};
 
+const DAMAGE = 5; // 5% damage per hit
+
 wss.on('connection', (ws) => {
   console.log('New connection established');
   let playerId = null;
@@ -31,7 +33,9 @@ wss.on('connection', (ws) => {
           id: data.id,
           color: data.color,
           position: { x: 0, y: 2, z: 0 },
-          rotation: { x: 0, y: 0, z: 0 }
+          rotation: { x: 0, y: 0, z: 0 },
+          health: data.health || 100,
+          sats: data.sats || 1000
         };
         
         // Send current players to new player
@@ -60,6 +64,59 @@ wss.on('connection', (ws) => {
           // Broadcast update to all other players
           wss.clients.forEach(client => {
             if (client !== ws && client.readyState === ws.OPEN) {
+              client.send(JSON.stringify({
+                type: 'players',
+                players
+              }));
+            }
+          });
+        }
+        break;
+
+      case 'hit':
+        // Handle player being hit
+        const targetPlayer = players[data.targetId];
+        if (targetPlayer && targetPlayer.health > 0) {
+          // Apply damage
+          targetPlayer.health = Math.max(0, targetPlayer.health - DAMAGE);
+          
+          // If player dies, they lose their bitcoin
+          if (targetPlayer.health <= 0) {
+            targetPlayer.sats = 0;
+          }
+
+          // Notify the hit player
+          const targetConnection = connections[data.targetId];
+          if (targetConnection && targetConnection.readyState === ws.OPEN) {
+            targetConnection.send(JSON.stringify({
+              type: 'playerHit',
+              targetId: data.targetId,
+              newHealth: targetPlayer.health,
+              newSats: targetPlayer.sats
+            }));
+          }
+
+          // Update all players about the new state
+          wss.clients.forEach(client => {
+            if (client.readyState === ws.OPEN) {
+              client.send(JSON.stringify({
+                type: 'players',
+                players
+              }));
+            }
+          });
+        }
+        break;
+
+      case 'respawn':
+        if (players[data.id]) {
+          players[data.id].health = 100;
+          players[data.id].sats = 0;
+          players[data.id].position = { x: 0, y: 2, z: 0 };
+          
+          // Notify all players
+          wss.clients.forEach(client => {
+            if (client.readyState === ws.OPEN) {
               client.send(JSON.stringify({
                 type: 'players',
                 players
