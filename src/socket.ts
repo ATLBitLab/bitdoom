@@ -26,6 +26,11 @@ socket.on("connect_error", (error: Error) => {
 socket.on("playerHit", (data: PlayerHitData) => {
   console.log("Received playerHit event:", data);
 
+  // Update window.gameState with new sats
+  if (window.gameState) {
+    window.gameState.player.sats = data.newSats;
+  }
+
   // Dispatch playerDamaged event for HUD
   const event = new CustomEvent("playerDamaged", {
     detail: {
@@ -46,6 +51,22 @@ socket.on("playerHit", (data: PlayerHitData) => {
     });
     window.dispatchEvent(killEvent);
   }
+});
+
+// Handle escaped event from server
+socket.on("escaped", (data: { sats: number }) => {
+  console.log("Received escaped event with sats:", data.sats);
+  
+  // Update window.gameState with final sats
+  if (window.gameState) {
+    window.gameState.player.sats = data.sats;
+  }
+
+  // Dispatch playerEscaped event for HUD
+  const event = new CustomEvent("playerEscaped", {
+    detail: { sats: data.sats }
+  });
+  window.dispatchEvent(event);
 });
 
 // Export a function to emit hit events
