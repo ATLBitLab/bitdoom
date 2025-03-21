@@ -18,7 +18,7 @@ export function CoinManager() {
       const z = (Math.random() - 0.5) * 20;
       return {
         id: `default-${i}`,
-        position: [x, 1.5, z] as [number, number, number], // Raised height for better collection
+        position: [x, 1.5, z] as [number, number, number],
         value: 100,
       };
     });
@@ -38,7 +38,7 @@ export function CoinManager() {
         
         return {
           id: `${Date.now()}-${i}`,
-          position: [x, 0.5, z] as [number, number, number], // Raised height for better collection
+          position: [x, 1.5, z] as [number, number, number],
           value: 100,
         };
       });
@@ -46,8 +46,19 @@ export function CoinManager() {
       setCoins(prev => [...prev, ...newCoins]);
     };
 
+    const handleCoinCollected = (event: CustomEvent) => {
+      const { coinId } = event.detail;
+      // Remove the coin that was collected
+      setCoins(prev => prev.filter(coin => coin.id !== coinId));
+    };
+
     window.addEventListener('coinsSpawned', handleCoinsSpawned as EventListener);
-    return () => window.removeEventListener('coinsSpawned', handleCoinsSpawned as EventListener);
+    window.addEventListener('coinCollected', handleCoinCollected as EventListener);
+    
+    return () => {
+      window.removeEventListener('coinsSpawned', handleCoinsSpawned as EventListener);
+      window.removeEventListener('coinCollected', handleCoinCollected as EventListener);
+    };
   }, []);
 
   // Check for coin collection
@@ -65,7 +76,7 @@ export function CoinManager() {
 
           // If player is close enough to collect the coin
           if (distance < 1) {
-            emitCoinCollected();
+            emitCoinCollected(coin.id); // Pass the coin's ID
             return false;
           }
           return true;
@@ -87,7 +98,7 @@ export function CoinManager() {
           position={coin.position}
           value={coin.value}
           onCollect={() => {
-            emitCoinCollected();
+            emitCoinCollected(coin.id); // Pass the coin's ID
             setCoins(prev => prev.filter(c => c.id !== coin.id));
           }}
         />

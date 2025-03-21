@@ -482,13 +482,12 @@ io.on('connection', (socket) => {
     if (player) {
       player.sats += 100; // Each coin is worth 100 sats
       
-      // Notify the player about their new sats
-      io.to(data.id).emit("coinCollected", {
-        newSats: player.sats
+      // Broadcast coin collection to all players
+      io.emit("coinCollected", {
+        playerId: data.id,
+        newSats: player.sats,
+        coinId: data.coinId
       });
-
-      // Update all players about the new state
-      io.emit("players", { players });
     }
   });
 

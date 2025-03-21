@@ -14,7 +14,9 @@ interface CoinsSpawnedData {
 }
 
 interface CoinCollectedData {
+  playerId: string;
   newSats: number;
+  coinId: string;
 }
 
 // Connect to the WebSocket server
@@ -70,15 +72,26 @@ socket.on("coinsSpawned", (data: CoinsSpawnedData) => {
 
 socket.on("coinCollected", (data: CoinCollectedData) => {
   console.log("Coin collected:", data);
-  // Update window.gameState with new sats value
-  if (window.gameState) {
-    window.gameState.player.sats = data.newSats;
+  
+  // Only update gameState and HUD if this is our player
+  if (data.playerId === localStorage.getItem("playerId")) {
+    // Update window.gameState with new sats value
+    if (window.gameState) {
+      window.gameState.player.sats = data.newSats;
+    }
+    // Dispatch playerDamaged event to update HUD with new sats value
+    window.dispatchEvent(new CustomEvent('playerDamaged', {
+      detail: {
+        health: window.gameState?.player?.health || 100,
+        sats: data.newSats
+      }
+    }));
   }
-  // Dispatch playerDamaged event to update HUD with new sats value
-  window.dispatchEvent(new CustomEvent('playerDamaged', {
+  
+  // Dispatch coinCollected event for coin removal
+  window.dispatchEvent(new CustomEvent('coinCollected', {
     detail: {
-      health: window.gameState?.player?.health || 100,
-      sats: data.newSats
+      coinId: data.coinId // Use the actual coin ID
     }
   }));
 });
@@ -106,7 +119,10 @@ export const emitHit = (targetId: string) => {
 };
 
 // Export a function to emit coin collection events
-export const emitCoinCollected = () => {
-  console.log("Emitting coinCollected event");
-  socket.emit("collectCoin", { id: localStorage.getItem("playerId") });
+export const emitCoinCollected = (coinId: string) => {
+  console.log("Emitting coinCollected event for coin:", coinId);
+  socket.emit("collectCoin", { 
+    id: localStorage.getItem("playerId"),
+    coinId: coinId 
+  });
 };
