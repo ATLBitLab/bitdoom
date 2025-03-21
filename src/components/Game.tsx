@@ -5,6 +5,7 @@ import { Player } from './Player';
 import { HUD } from './HUD';
 import { MultiplayerManager } from './MultiplayerManager';
 import { BackgroundMusic } from './BackgroundMusic';
+import { CoinManager } from './CoinManager';
 import { Color } from 'three';
 
 export function Game() {
@@ -31,6 +32,7 @@ export function Game() {
           <Environment />
           <Player />
           <MultiplayerManager />
+          <CoinManager />
           <Stars 
             radius={200} 
             depth={50} 

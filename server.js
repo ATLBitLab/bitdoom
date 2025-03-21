@@ -429,28 +429,34 @@ io.on('connection', (socket) => {
   socket.on("hit", (data) => {
     // Handle player being hit
     const targetPlayer = players[data.targetId];
-    const attackingPlayer = players[data.id]; // Add the attacking player's ID to track who dealt the damage
+    const attackingPlayer = players[data.id];
 
     if (targetPlayer && targetPlayer.health > 0 && attackingPlayer) {
       // Apply damage
       targetPlayer.health = Math.max(0, targetPlayer.health - DAMAGE);
 
-      // If player dies, transfer their bitcoin to the killer
+      // If player dies, spawn coins instead of direct transfer
       if (targetPlayer.health <= 0) {
-        const stolenSats = targetPlayer.sats;
+        const coinsToSpawn = Math.floor(targetPlayer.sats / 100);
         targetPlayer.sats = 0;
-        attackingPlayer.sats += stolenSats;
 
         console.log(
-          `Player ${data.id} killed Player ${data.targetId} and stole ${stolenSats} sats`
+          `Player ${data.id} killed Player ${data.targetId} and spawned ${coinsToSpawn} coins`
         );
 
-        // Notify the killer about their new sats
-        io.to(data.id).emit("playerHit", {
+        // Notify all players about the coins spawn
+        io.emit("coinsSpawned", {
+          targetId: data.targetId,
+          position: targetPlayer.position,
+          coins: coinsToSpawn,
+          totalSats: coinsToSpawn * 100
+        });
+
+        // Notify the killer about the kill
+        io.to(data.id).emit("playerKilled", {
           targetId: data.targetId,
           newHealth: attackingPlayer.health,
-          newSats: attackingPlayer.sats,
-          stolenSats: stolenSats,
+          newSats: attackingPlayer.sats
         });
       }
 
@@ -463,6 +469,22 @@ io.on('connection', (socket) => {
         targetId: data.targetId,
         newHealth: targetPlayer.health,
         newSats: targetPlayer.sats,
+      });
+
+      // Update all players about the new state
+      io.emit("players", { players });
+    }
+  });
+
+  // Handle coin collection
+  socket.on("collectCoin", (data) => {
+    const player = players[data.id];
+    if (player) {
+      player.sats += 100; // Each coin is worth 100 sats
+      
+      // Notify the player about their new sats
+      io.to(data.id).emit("coinCollected", {
+        newSats: player.sats
       });
 
       // Update all players about the new state

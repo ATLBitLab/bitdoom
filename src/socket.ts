@@ -4,7 +4,17 @@ interface PlayerHitData {
   targetId: string;
   newHealth: number;
   newSats: number;
-  stolenSats?: number;
+}
+
+interface CoinsSpawnedData {
+  targetId: string;
+  position: { x: number; y: number; z: number };
+  coins: number;
+  totalSats: number;
+}
+
+interface CoinCollectedData {
+  newSats: number;
 }
 
 // Connect to the WebSocket server
@@ -36,21 +46,41 @@ socket.on("playerHit", (data: PlayerHitData) => {
     detail: {
       health: data.newHealth,
       sats: data.newSats,
-      stolenSats: data.stolenSats,
     },
   });
   window.dispatchEvent(event);
 
   console.log("Dispatched playerDamaged event with health:", data.newHealth);
+});
 
-  // If we stole bitcoin, show a notification
-  if (data.stolenSats) {
-    console.log(`Stole ${data.stolenSats} sats from kill!`);
-    const killEvent = new CustomEvent("playerKill", {
-      detail: { stolenSats: data.stolenSats },
-    });
-    window.dispatchEvent(killEvent);
+socket.on("coinsSpawned", (data: CoinsSpawnedData) => {
+  console.log("Received coinsSpawned event:", data);
+  
+  // Dispatch coinsSpawned event for game
+  const event = new CustomEvent("coinsSpawned", {
+    detail: {
+      targetId: data.targetId,
+      position: data.position,
+      coins: data.coins,
+      totalSats: data.totalSats
+    }
+  });
+  window.dispatchEvent(event);
+});
+
+socket.on("coinCollected", (data: CoinCollectedData) => {
+  console.log("Coin collected:", data);
+  // Update window.gameState with new sats value
+  if (window.gameState) {
+    window.gameState.player.sats = data.newSats;
   }
+  // Dispatch playerDamaged event to update HUD with new sats value
+  window.dispatchEvent(new CustomEvent('playerDamaged', {
+    detail: {
+      health: window.gameState?.player?.health || 100,
+      sats: data.newSats
+    }
+  }));
 });
 
 // Handle escaped event from server
@@ -73,4 +103,10 @@ socket.on("escaped", (data: { sats: number }) => {
 export const emitHit = (targetId: string) => {
   console.log("Emitting hit event for target:", targetId);
   socket.emit("hit", { targetId, id: localStorage.getItem("playerId") });
+};
+
+// Export a function to emit coin collection events
+export const emitCoinCollected = () => {
+  console.log("Emitting coinCollected event");
+  socket.emit("collectCoin", { id: localStorage.getItem("playerId") });
 };
