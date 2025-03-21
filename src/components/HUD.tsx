@@ -21,6 +21,7 @@ export function HUD() {
   const [escapedSats, setEscapedSats] = useState(0);
   const [showClaim, setShowClaim] = useState(false);
   const [showCoinFlash, setShowCoinFlash] = useState(false);
+  const [showDamageFlash, setShowDamageFlash] = useState(false);
   const { emitRespawn } = useGame();
   const navigate = useNavigate();
 
@@ -28,6 +29,9 @@ export function HUD() {
     const handleDamage = (event: CustomEvent) => {
       setHealth(event.detail.health);
       setSats(event.detail.sats);
+      // Trigger damage flash effect
+      setShowDamageFlash(true);
+      setTimeout(() => setShowDamageFlash(false), 200);
       if (event.detail.health <= 0) {
         setIsDead(true);
       }
@@ -178,8 +182,16 @@ export function HUD() {
       {/* Coin collection flash effect */}
       {showCoinFlash && (
         <div 
-          className="fixed inset-0 bg-yellow-400 bg-opacity-30 pointer-events-none z-40 transition-opacity duration-200"
+          className="fixed inset-0 bg-yellow-300 bg-opacity-30 pointer-events-none z-40 transition-opacity duration-200"
           style={{ animation: 'flash 0.2s ease-out' }}
+        />
+      )}
+
+      {/* Damage flash effect */}
+      {showDamageFlash && (
+        <div 
+          className="fixed inset-0 bg-red-500 bg-opacity-40 pointer-events-none z-40 transition-opacity duration-200"
+          style={{ animation: 'damageFlash 0.2s ease-out' }}
         />
       )}
 
@@ -202,6 +214,10 @@ export function HUD() {
         {`
           @keyframes flash {
             0% { opacity: 0.3; }
+            100% { opacity: 0; }
+          }
+          @keyframes damageFlash {
+            0% { opacity: 0.6; }
             100% { opacity: 0; }
           }
         `}
