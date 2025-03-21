@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Game } from "./components/Game";
 import { Menu } from "./components/Menu";
-import { Claim } from "./components/Claim";
 import { useState } from "react";
 
 function App() {
@@ -27,7 +26,7 @@ function App() {
             path="/claim"
             element={
               <div className="w-full h-full">
-                <Claim sats={1000} lightningAddress={localStorage.getItem('lightningAddress') || ''} />
+                <Game />
               </div>
             }
           />

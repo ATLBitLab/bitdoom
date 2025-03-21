@@ -90,7 +90,7 @@ export function HUD() {
         </div>
       );
     }
-    return <Claim sats={sats} lightningAddress={storedLightningAddress} />;
+    return <Claim sats={escapedSats} lightningAddress={storedLightningAddress} />;
   }
 
   if (isDead) {
