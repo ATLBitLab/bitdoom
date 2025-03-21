@@ -19,6 +19,8 @@ export function HUD() {
   const [isPortalOpen, setIsPortalOpen] = useState(false);
   const [hasEscaped, setHasEscaped] = useState(false);
   const [escapedSats, setEscapedSats] = useState(0);
+  const [showClaim, setShowClaim] = useState(false);
+  const [showCoinFlash, setShowCoinFlash] = useState(false);
   const { emitRespawn } = useGame();
   const navigate = useNavigate();
 
@@ -45,6 +47,14 @@ export function HUD() {
     const handleEscape = (event: CustomEvent) => {
       setHasEscaped(true);
       setEscapedSats(event.detail.sats);
+      setShowClaim(true);
+    };
+
+    const handleCoinCollected = () => {
+      // Trigger the flash effect
+      setShowCoinFlash(true);
+      // Remove the flash after 200ms
+      setTimeout(() => setShowCoinFlash(false), 200);
     };
 
     // Sync portal timer with server
@@ -56,11 +66,13 @@ export function HUD() {
     window.addEventListener('playerDamaged', handleDamage as EventListener);
     window.addEventListener('playerKill', handleKill as EventListener);
     window.addEventListener('playerEscaped', handleEscape as EventListener);
+    window.addEventListener('coinCollected', handleCoinCollected as EventListener);
 
     return () => {
       window.removeEventListener('playerDamaged', handleDamage as EventListener);
       window.removeEventListener('playerKill', handleKill as EventListener);
       window.removeEventListener('playerEscaped', handleEscape as EventListener);
+      window.removeEventListener('coinCollected', handleCoinCollected as EventListener);
       socket.off('portalTimerSync');
     };
   }, []);
@@ -163,7 +175,15 @@ export function HUD() {
         </div>
       </div>
 
-      {hasEscaped && (
+      {/* Coin collection flash effect */}
+      {showCoinFlash && (
+        <div 
+          className="fixed inset-0 bg-yellow-400 bg-opacity-30 pointer-events-none z-40 transition-opacity duration-200"
+          style={{ animation: 'flash 0.2s ease-out' }}
+        />
+      )}
+
+      {showClaim && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 pointer-events-auto">
           <div className="bg-white p-8 rounded-lg shadow-lg text-center">
             <h2 className="text-2xl font-bold mb-4">You Escaped!</h2>
@@ -177,6 +197,15 @@ export function HUD() {
           </div>
         </div>
       )}
+
+      <style>
+        {`
+          @keyframes flash {
+            0% { opacity: 0.3; }
+            100% { opacity: 0; }
+          }
+        `}
+      </style>
     </>
   );
 }
