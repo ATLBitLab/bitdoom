@@ -173,6 +173,80 @@ app.get("/invoice", async (req, res) => {
   }
 });
 
+// Route to create a withdrawal invoice
+app.post("/withdraw", async (req, res) => {
+  try {
+    console.log("Creating withdrawal invoice");
+    const { lightningAddress, amount } = req.body;
+    
+    if (!lightningAddress || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid withdrawal request" });
+    }
+
+    if (PAYMENT_PROCESSOR === 'voltage_payments') {
+      // Generate a UUID for the payment
+      const paymentId = crypto.randomUUID();
+      
+      // Create payment request
+      const response = await axios.post(
+        `${VOLTAGE_API_URL}/v1/organizations/${VOLTAGE_ORGANIZATION_ID}/environments/${VOLTAGE_ENVIRONMENT_ID}/payments`,
+        {
+          id: paymentId,
+          wallet_id: VOLTAGE_WALLET_ID,
+          currency: "btc",
+          amount_msats: amount * 1000, // Convert sats to msats
+          payment_kind: "bolt11",
+          description: "BitDoom Withdrawal",
+          destination: lightningAddress
+        },
+        {
+          headers: {
+            "x-api-key": VOLTAGE_API_KEY,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.status === 202) {
+        return res.json({
+          payment_request: null, // Will be populated by polling
+          invoice_id: paymentId,
+          payment_processor: 'voltage_payments'
+        });
+      }
+    }
+
+    // Default to LNBits
+    const response = await axios.post(
+      `${LNBITS_API_URL}/api/v1/payments`,
+      { 
+        out: true, 
+        amount: amount,
+        memo: "BitDoom Withdrawal",
+        lnurl: lightningAddress
+      },
+      {
+        headers: {
+          "X-Api-Key": LNBITS_ADMIN_KEY,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return res.json({
+      payment_request: response.data.payment_request,
+      invoice_id: response.data.payment_hash,
+      payment_processor: 'lnbits'
+    });
+  } catch (error) {
+    console.error(
+      "Error creating withdrawal invoice:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to create withdrawal invoice" });
+  }
+});
+
 // Store all connected players
 const players = {};
 const DAMAGE = 5; // 5% damage per hit

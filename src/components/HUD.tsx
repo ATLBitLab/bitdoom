@@ -2,6 +2,8 @@ import { Infinity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { socket } from '../socket';
 import { useGame } from '../hooks/useGame';
+import { useNavigate } from "react-router-dom";
+import { Claim } from "./Claim";
 
 interface KillNotification {
   stolenSats: number;
@@ -16,7 +18,9 @@ export function HUD() {
   const [countdown, setCountdown] = useState(60);
   const [isPortalOpen, setIsPortalOpen] = useState(false);
   const [hasEscaped, setHasEscaped] = useState(false);
+  const [escapedSats, setEscapedSats] = useState(0);
   const { emitRespawn } = useGame();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleDamage = (event: CustomEvent) => {
@@ -38,8 +42,9 @@ export function HUD() {
       }, 3000);
     };
 
-    const handleEscape = () => {
+    const handleEscape = (event: CustomEvent) => {
       setHasEscaped(true);
+      setEscapedSats(event.detail.sats);
     };
 
     // Sync portal timer with server
@@ -66,21 +71,26 @@ export function HUD() {
     socket.emit('respawn', { id: localStorage.getItem('playerId') });
   };
 
-  if (hasEscaped) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
-        <div className="text-center">
-          <h2 className="text-blue-500 text-4xl mb-4">You Escaped!</h2>
-          <p className="text-white text-xl mb-4">Your Bitcoin Balance: {sats} sats</p>
-          <button
-            onClick={() => window.location.href = '/claim'}
-            className="bg-yellow-500 hover:bg-yellow-600 text-black px-6 py-3 rounded-lg text-lg transition-colors"
-          >
-            Claim Your Bitcoin
-          </button>
+  const handleClaim = () => {
+    navigate("/claim");
+  };
+
+  // Check if we're on the claim route
+  const isClaimRoute = window.location.pathname === "/claim";
+  const storedLightningAddress = localStorage.getItem('lightningAddress');
+
+  if (isClaimRoute) {
+    if (!storedLightningAddress) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
+            <h1 className="text-2xl font-bold mb-6">Error</h1>
+            <p className="text-red-500">No lightning address found. Please return to the game and try again.</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
+    return <Claim sats={sats} lightningAddress={storedLightningAddress} />;
   }
 
   if (isDead) {
@@ -152,6 +162,21 @@ export function HUD() {
           </div>
         </div>
       </div>
+
+      {hasEscaped && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 pointer-events-auto">
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+            <h2 className="text-2xl font-bold mb-4">You Escaped!</h2>
+            <p className="mb-4">You kept {escapedSats} sats!</p>
+            <button
+              onClick={handleClaim}
+              className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+            >
+              Claim Bitcoin
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

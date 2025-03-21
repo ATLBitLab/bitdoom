@@ -85,6 +85,9 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
         throw new Error(data.error);
       }
 
+      // Store the lightning address for later use
+      localStorage.setItem('lightningAddress', lightningAddress);
+
       setInvoice(data.payment_request || ""); // Might be null for Voltage Payments initially
       setInvoiceId(data.invoice_id);
       setPaymentProcessor(data.payment_processor);
