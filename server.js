@@ -16,37 +16,7 @@ const app = express();
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Add middleware to parse JSON bodies
 
-// Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, "dist")));
-
-// Handle React routing, return all requests to React app
-app.get("*", (req, res, next) => {
-  if (req.path === "/invoice") {
-    return next();
-  }
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
-
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
-
-const LNBITS_API_URL = process.env.LNBITS_API_URL;
-const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
-const PAYMENT_PROCESSOR = process.env.PAYMENT_PROCESSOR || 'lnbits';
-
-// Voltage Payments configuration
-const VOLTAGE_API_URL = process.env.VOLTAGE_API_URL;
-const VOLTAGE_API_KEY = process.env.VOLTAGE_API_KEY;
-const VOLTAGE_ORGANIZATION_ID = process.env.VOLTAGE_ORGANIZATION_ID;
-const VOLTAGE_ENVIRONMENT_ID = process.env.VOLTAGE_ENVIRONMENT_ID;
-const VOLTAGE_WALLET_ID = process.env.VOLTAGE_WALLET_ID;
-
-// Route to create a Lightning invoice
+// API Routes
 app.post("/invoice", async (req, res) => {
   try {
     console.log("Creating invoice");
@@ -110,7 +80,6 @@ app.post("/invoice", async (req, res) => {
   }
 });
 
-// Route to check invoice status
 app.get("/invoice", async (req, res) => {
   try {
     console.log("Checking invoice status");
@@ -173,7 +142,6 @@ app.get("/invoice", async (req, res) => {
   }
 });
 
-// Route to create a withdrawal invoice
 app.post("/withdraw", async (req, res) => {
   try {
     console.log("Creating withdrawal invoice");
@@ -246,6 +214,118 @@ app.post("/withdraw", async (req, res) => {
     res.status(500).json({ error: "Failed to create withdrawal invoice" });
   }
 });
+
+app.post("/pay", async (req, res) => {
+  try {
+    const { payment_request, amount } = req.body;
+    
+    if (!payment_request || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid payment request" });
+    }
+
+    // Generate a UUID for the payment
+    const paymentId = crypto.randomUUID();
+    
+    // Create payment request
+    const response = await axios.post(
+      `${VOLTAGE_API_URL}/v1/organizations/${VOLTAGE_ORGANIZATION_ID}/environments/${VOLTAGE_ENVIRONMENT_ID}/payments`,
+      {
+        id: paymentId,
+        wallet_id: VOLTAGE_WALLET_ID,
+        currency: "btc",
+        type: "bolt11",
+        data: {
+          amount_msats: amount * 1000, // Convert sats to msats
+          max_fee_msats: Math.floor(amount * 1000 * 0.1), // 10% of amount
+          payment_request: payment_request
+        }
+      },
+      {
+        headers: {
+          "x-api-key": VOLTAGE_API_KEY,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    if (response.status === 202) {
+      return res.json({
+        payment_id: paymentId,
+        status: "pending"
+      });
+    }
+
+    throw new Error("Failed to initiate payment");
+  } catch (error) {
+    console.error(
+      "Error processing payment:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to process payment" });
+  }
+});
+
+app.get("/payment-status/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!id) {
+      return res.status(400).json({ error: "Payment ID is required" });
+    }
+
+    const response = await axios.get(
+      `${VOLTAGE_API_URL}/v1/organizations/${VOLTAGE_ORGANIZATION_ID}/environments/${VOLTAGE_ENVIRONMENT_ID}/payments/${id}`,
+      {
+        headers: {
+          "x-api-key": VOLTAGE_API_KEY
+        }
+      }
+    );
+
+    const payment = response.data;
+    
+    if (payment.status === "completed") {
+      return res.json({ status: "completed" });
+    } else if (payment.error) {
+      return res.json({ status: "error", error: payment.error });
+    } else {
+      return res.json({ status: "pending" });
+    }
+  } catch (error) {
+    console.error(
+      "Error checking payment status:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to check payment status" });
+  }
+});
+
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, "dist")));
+
+// Handle React routing, return all requests to React app
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+const LNBITS_API_URL = process.env.LNBITS_API_URL;
+const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
+const PAYMENT_PROCESSOR = process.env.PAYMENT_PROCESSOR || 'lnbits';
+
+// Voltage Payments configuration
+const VOLTAGE_API_URL = process.env.VOLTAGE_API_URL;
+const VOLTAGE_API_KEY = process.env.VOLTAGE_API_KEY;
+const VOLTAGE_ORGANIZATION_ID = process.env.VOLTAGE_ORGANIZATION_ID;
+const VOLTAGE_ENVIRONMENT_ID = process.env.VOLTAGE_ENVIRONMENT_ID;
+const VOLTAGE_WALLET_ID = process.env.VOLTAGE_WALLET_ID;
 
 // Store all connected players
 const players = {};
