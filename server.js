@@ -7,6 +7,7 @@ import axios from "axios";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,11 +37,53 @@ const io = new Server(httpServer, {
 
 const LNBITS_API_URL = process.env.LNBITS_API_URL;
 const LNBITS_ADMIN_KEY = process.env.LNBITS_ADMIN_KEY;
+const PAYMENT_PROCESSOR = process.env.PAYMENT_PROCESSOR || 'lnbits';
+
+// Voltage Payments configuration
+const VOLTAGE_API_URL = process.env.VOLTAGE_API_URL;
+const VOLTAGE_API_KEY = process.env.VOLTAGE_API_KEY;
+const VOLTAGE_ORGANIZATION_ID = process.env.VOLTAGE_ORGANIZATION_ID;
+const VOLTAGE_ENVIRONMENT_ID = process.env.VOLTAGE_ENVIRONMENT_ID;
+const VOLTAGE_WALLET_ID = process.env.VOLTAGE_WALLET_ID;
 
 // Route to create a Lightning invoice
 app.post("/invoice", async (req, res) => {
   try {
     console.log("Creating invoice");
+    
+    if (PAYMENT_PROCESSOR === 'voltage_payments') {
+      // Generate a UUID for the payment
+      const paymentId = crypto.randomUUID();
+      
+      // Create payment request
+      const response = await axios.post(
+        `${VOLTAGE_API_URL}/v1/organizations/${VOLTAGE_ORGANIZATION_ID}/environments/${VOLTAGE_ENVIRONMENT_ID}/payments`,
+        {
+          id: paymentId,
+          wallet_id: VOLTAGE_WALLET_ID,
+          currency: "btc",
+          amount_msats: 1000000,
+          payment_kind: "bolt11",
+          description: "BitDoom Player Joins"
+        },
+        {
+          headers: {
+            "x-api-key": VOLTAGE_API_KEY,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      if (response.status === 202) {
+        return res.json({
+          payment_request: null, // Will be populated by polling
+          invoice_id: paymentId,
+          payment_processor: 'voltage_payments'
+        });
+      }
+    }
+
+    // Default to LNBits
     const response = await axios.post(
       `${LNBITS_API_URL}/api/v1/payments`,
       { out: false, amount: 1000, memo: "player join" },
@@ -56,6 +99,7 @@ app.post("/invoice", async (req, res) => {
     return res.json({
       payment_request: response.data.payment_request,
       invoice_id: response.data.payment_hash,
+      payment_processor: 'lnbits'
     });
   } catch (error) {
     console.error(
@@ -70,11 +114,50 @@ app.post("/invoice", async (req, res) => {
 app.get("/invoice", async (req, res) => {
   try {
     console.log("Checking invoice status");
-    const { id } = req.query;
+    const { id, processor } = req.query;
     if (!id) {
       return res.status(400).json({ error: "Invoice ID is required" });
     }
 
+    if (processor === 'voltage_payments') {
+      const response = await axios.get(
+        `${VOLTAGE_API_URL}/v1/organizations/${VOLTAGE_ORGANIZATION_ID}/environments/${VOLTAGE_ENVIRONMENT_ID}/payments/${id}`,
+        {
+          headers: {
+            "x-api-key": VOLTAGE_API_KEY
+          }
+        }
+      );
+
+      const payment = response.data;
+      
+      // If the payment is still being created, return PENDING
+      if (payment.status === 'receiving' && !payment.data?.payment_request) {
+        return res.json({ status: "PENDING" });
+      }
+
+      // If we have the payment request but it's not paid yet
+      if (payment.status === 'receiving' && payment.data?.payment_request) {
+        return res.json({ 
+          status: "PENDING",
+          payment_request: payment.data.payment_request
+        });
+      }
+
+      // If the payment is completed
+      if (payment.status === 'completed') {
+        return res.json({ status: "PAID" });
+      }
+
+      // If there was an error
+      if (payment.error) {
+        return res.status(500).json({ error: payment.error });
+      }
+
+      return res.json({ status: "PENDING" });
+    }
+
+    // Default to LNBits
     const response = await axios.get(
       `${LNBITS_API_URL}/api/v1/payments/${id}`,
       { headers: { "X-Api-Key": LNBITS_ADMIN_KEY } }

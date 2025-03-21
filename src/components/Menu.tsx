@@ -16,6 +16,7 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
   );
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [paymentProcessor, setPaymentProcessor] = useState<"lnbits" | "voltage_payments" | null>(null);
 
   useEffect(() => {
     console.debug("status", status);
@@ -24,14 +25,19 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
   useEffect(() => {
     let intervalId: number;
 
-    if (status === "PENDING" && invoiceId) {
+    if (status === "PENDING" && invoiceId && paymentProcessor) {
       intervalId = window.setInterval(async () => {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/invoice?id=${invoiceId}`
+            `${API_BASE_URL}/invoice?id=${invoiceId}&processor=${paymentProcessor}`
           );
           const data = await response.json();
           console.debug("check payment status", data);
+
+          // Handle Voltage Payments polling
+          if (paymentProcessor === "voltage_payments" && data.payment_request) {
+            setInvoice(data.payment_request);
+          }
 
           if (data.status === "PAID") {
             setStatus("PAID");
@@ -48,7 +54,7 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
         clearInterval(intervalId);
       }
     };
-  }, [status, invoiceId, onGameStart]);
+  }, [status, invoiceId, paymentProcessor, onGameStart]);
 
   const handleJoinGame = async () => {
     if (!lightningAddress) {
@@ -79,11 +85,17 @@ export const Menu: React.FC<MenuProps> = ({ onGameStart }) => {
         throw new Error(data.error);
       }
 
-      setInvoice(data.payment_request);
+      setInvoice(data.payment_request || ""); // Might be null for Voltage Payments initially
       setInvoiceId(data.invoice_id);
+      setPaymentProcessor(data.payment_processor);
       setStatus("PENDING");
     } catch (err) {
-      setError("Failed to generate invoice. Please try again.");
+      // Handle specific error messages from the server
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Failed to generate invoice. Please try again.");
+      }
       console.error("Error generating invoice:", err);
     } finally {
       setIsLoading(false);
