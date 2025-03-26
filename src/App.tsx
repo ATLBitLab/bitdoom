@@ -1,15 +1,38 @@
-import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Game } from "./components/Game";
 import { Menu } from "./components/Menu";
+import { useState } from "react";
 
 function App() {
-  const [isGameStarted, setIsGameStarted] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
 
   return (
-    <div className="w-screen h-screen">
-      {!isGameStarted && <Menu onGameStart={() => setIsGameStarted(true)} />}
-      <Game />
-    </div>
+    <Router>
+      <div className="w-screen h-screen bg-black">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <div className="w-full h-full">
+                {!gameStarted ? (
+                  <Menu onGameStart={() => setGameStarted(true)} />
+                ) : (
+                  <Game />
+                )}
+              </div>
+            }
+          />
+          <Route
+            path="/claim"
+            element={
+              <div className="w-full h-full">
+                <Game />
+              </div>
+            }
+          />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 

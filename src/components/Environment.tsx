@@ -31,7 +31,9 @@ export function Environment() {
     document.exitPointerLock();
     
     socket.emit('playerEscaped', { id: localStorage.getItem('playerId') });
-    const event = new CustomEvent('playerEscaped');
+    const event = new CustomEvent('playerEscaped', {
+      detail: { sats: window.gameState?.player?.sats || 0 }
+    });
     window.dispatchEvent(event);
   };
 
