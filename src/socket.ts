@@ -4,7 +4,19 @@ interface PlayerHitData {
   targetId: string;
   newHealth: number;
   newSats: number;
-  stolenSats?: number;
+}
+
+interface CoinsSpawnedData {
+  targetId: string;
+  position: { x: number; y: number; z: number };
+  coins: number;
+  totalSats: number;
+}
+
+interface CoinCollectedData {
+  playerId: string;
+  newSats: number;
+  coinId: string;
 }
 
 // Connect to the WebSocket server
@@ -26,30 +38,91 @@ socket.on("connect_error", (error: Error) => {
 socket.on("playerHit", (data: PlayerHitData) => {
   console.log("Received playerHit event:", data);
 
+  // Update window.gameState with new sats
+  if (window.gameState) {
+    window.gameState.player.sats = data.newSats;
+  }
+
   // Dispatch playerDamaged event for HUD
   const event = new CustomEvent("playerDamaged", {
     detail: {
       health: data.newHealth,
       sats: data.newSats,
-      stolenSats: data.stolenSats,
     },
   });
   window.dispatchEvent(event);
 
   console.log("Dispatched playerDamaged event with health:", data.newHealth);
+});
 
-  // If we stole bitcoin, show a notification
-  if (data.stolenSats) {
-    console.log(`Stole ${data.stolenSats} sats from kill!`);
-    const killEvent = new CustomEvent("playerKill", {
-      detail: { stolenSats: data.stolenSats },
-    });
-    window.dispatchEvent(killEvent);
+socket.on("coinsSpawned", (data: CoinsSpawnedData) => {
+  console.log("Received coinsSpawned event:", data);
+  
+  // Dispatch coinsSpawned event for game
+  const event = new CustomEvent("coinsSpawned", {
+    detail: {
+      targetId: data.targetId,
+      position: data.position,
+      coins: data.coins,
+      totalSats: data.totalSats
+    }
+  });
+  window.dispatchEvent(event);
+});
+
+socket.on("coinCollected", (data: CoinCollectedData) => {
+  console.log("Coin collected:", data);
+  
+  // Only update gameState and HUD if this is our player
+  if (data.playerId === localStorage.getItem("playerId")) {
+    // Update window.gameState with new sats value
+    if (window.gameState) {
+      window.gameState.player.sats = data.newSats;
+    }
+    // Dispatch playerDamaged event to update HUD with new sats value
+    window.dispatchEvent(new CustomEvent('playerDamaged', {
+      detail: {
+        health: window.gameState?.player?.health || 100,
+        sats: data.newSats
+      }
+    }));
   }
+  
+  // Dispatch coinCollected event for coin removal
+  window.dispatchEvent(new CustomEvent('coinCollected', {
+    detail: {
+      coinId: data.coinId // Use the actual coin ID
+    }
+  }));
+});
+
+// Handle escaped event from server
+socket.on("escaped", (data: { sats: number }) => {
+  console.log("Received escaped event with sats:", data.sats);
+  
+  // Update window.gameState with final sats
+  if (window.gameState) {
+    window.gameState.player.sats = data.sats;
+  }
+
+  // Dispatch playerEscaped event for HUD
+  const event = new CustomEvent("playerEscaped", {
+    detail: { sats: data.sats }
+  });
+  window.dispatchEvent(event);
 });
 
 // Export a function to emit hit events
 export const emitHit = (targetId: string) => {
   console.log("Emitting hit event for target:", targetId);
   socket.emit("hit", { targetId, id: localStorage.getItem("playerId") });
+};
+
+// Export a function to emit coin collection events
+export const emitCoinCollected = (coinId: string) => {
+  console.log("Emitting coinCollected event for coin:", coinId);
+  socket.emit("collectCoin", { 
+    id: localStorage.getItem("playerId"),
+    coinId: coinId 
+  });
 };
