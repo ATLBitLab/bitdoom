@@ -71,7 +71,7 @@ socket.on("coinsSpawned", (data: CoinsSpawnedData) => {
 });
 
 socket.on("coinCollected", (data: CoinCollectedData) => {
-  console.log("Coin collected:", data);
+  console.log("Coin collected event received:", data);
   
   // Only update gameState and HUD if this is our player
   if (data.playerId === localStorage.getItem("playerId")) {
@@ -88,10 +88,11 @@ socket.on("coinCollected", (data: CoinCollectedData) => {
     }));
   }
   
-  // Dispatch coinCollected event for coin removal
+  // Always dispatch coinCollected event for coin removal
+  console.log("Dispatching coinCollected event with coinId:", data.coinId);
   window.dispatchEvent(new CustomEvent('coinCollected', {
     detail: {
-      coinId: data.coinId // Use the actual coin ID
+      coinId: data.coinId
     }
   }));
 });

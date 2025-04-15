@@ -486,7 +486,7 @@ io.on('connection', (socket) => {
       io.emit("coinCollected", {
         playerId: data.id,
         newSats: player.sats,
-        coinId: data.coinId
+        coinId: data.coinId // Make sure we pass the coin ID
       });
     }
   });

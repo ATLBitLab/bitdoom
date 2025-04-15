@@ -37,7 +37,7 @@ export function CoinManager() {
         const z = position.z + Math.sin(angle) * distance;
         
         return {
-          id: `${Date.now()}-${i}`,
+          id: `dropped-${Date.now()}-${i}`, // Make dropped coins have a distinct prefix
           position: [x, 1.5, z] as [number, number, number],
           value: 100,
         };
@@ -48,8 +48,13 @@ export function CoinManager() {
 
     const handleCoinCollected = (event: CustomEvent) => {
       const { coinId } = event.detail;
+      console.log('Removing coin:', coinId);
       // Remove the coin that was collected
-      setCoins(prev => prev.filter(coin => coin.id !== coinId));
+      setCoins(prev => {
+        const newCoins = prev.filter(coin => coin.id !== coinId);
+        console.log('Remaining coins:', newCoins.length);
+        return newCoins;
+      });
     };
 
     window.addEventListener('coinsSpawned', handleCoinsSpawned as EventListener);
@@ -76,7 +81,8 @@ export function CoinManager() {
 
           // If player is close enough to collect the coin
           if (distance < 1) {
-            emitCoinCollected(coin.id); // Pass the coin's ID
+            console.log('Collecting coin:', coin.id);
+            emitCoinCollected(coin.id);
             return false;
           }
           return true;
@@ -98,7 +104,7 @@ export function CoinManager() {
           position={coin.position}
           value={coin.value}
           onCollect={() => {
-            emitCoinCollected(coin.id); // Pass the coin's ID
+            emitCoinCollected(coin.id); // Pass the actual coin ID
             setCoins(prev => prev.filter(c => c.id !== coin.id));
           }}
         />

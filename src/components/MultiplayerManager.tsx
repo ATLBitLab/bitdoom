@@ -175,6 +175,9 @@ export function MultiplayerManager() {
                 >
                   {player.name}
                 </div>
+                <div className="text-xs text-yellow-400 whitespace-nowrap">
+                  {player.sats} sats
+                </div>
                 <div className="w-20 h-1 bg-gray-800 rounded overflow-hidden">
                   <div 
                     className="h-full bg-red-500 transition-all duration-300" 
